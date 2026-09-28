@@ -83,7 +83,8 @@ but always run the readiness check (§1) first and surface any problem before ac
 Say the permission line from ground rule 3, then check. Each item is ✅ or a plain ❌ with the fix.
 
 0. **Self-update, then can I run the scripts?** — first, quietly:
-   `git -C "<skill dir>" pull --ff-only --quiet` (10 s timeout). If it updated, say once: *"I picked
+   `git -C "<skill dir>" pull --ff-only --quiet` (run it with a 15-second tool timeout — macOS has
+   no `timeout` command). If it updated, say once: *"I picked
    up a newer version of this assistant — carrying on."* If it fails (no network, not a git
    checkout, auth) → ignore and continue with what is installed; never block on it.
    Then `node --version` (need v18+). Then
