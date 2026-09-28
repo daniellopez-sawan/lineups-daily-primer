@@ -1,0 +1,72 @@
+{
+  "_note": "Event-tag vocabulary. Sources: Kenny's tag PDF (NBA) + NFL CSV, plus Thom 2026-09-22: primetime games get their own tag (TNF/SNF/MNF) and are NOT also week-tagged; Sunday content not related to SNF gets 'NFL Week [N]'. Names must match the WordPress tag EXACTLY; null = not created on the site yet. Week numbering as of 2026-09-22: NFL Week 3 (24-29 Sep), CFB Week 4 (26 Sep).",
+  "NBA": {
+    "NBA Tipoff": null,
+    "NBA Cup": null,
+    "NBA Christmas Day": null,
+    "NBA MLK Day": null,
+    "NBA All Star Game": null,
+    "NBA Play-In Tourney": null,
+    "NBA Playoffs First Round": null,
+    "NBA Playoffs Conference Semifinals": null,
+    "NBA Playoffs Conference Finals": null,
+    "NBA Finals": null,
+    "NBA MVP": null
+  },
+  "NFL": {
+    "TNF": null,
+    "SNF": null,
+    "MNF": null,
+    "NFL Week 1": null,
+    "NFL Week 2": null,
+    "NFL Week 3": null,
+    "NFL Week 4": null,
+    "NFL Week 5": null,
+    "NFL Week 6": null,
+    "NFL Week 7": null,
+    "NFL Week 8": null,
+    "NFL Week 9": null,
+    "NFL Week 10": null,
+    "NFL Week 11": null,
+    "NFL Week 12": null,
+    "NFL Week 13": null,
+    "NFL Week 14": null,
+    "NFL Week 15": null,
+    "NFL Week 16": null,
+    "NFL Week 17": null,
+    "NFL Week 18": null,
+    "NFL Wild Card Playoffs": null,
+    "NFL Divisional Playoffs": null,
+    "NFL Conference Championships": null,
+    "Super Bowl LXI": null,
+    "NFL MVP": null
+  },
+  "MLB": {
+    "_todo": "Wild Card, ALDS/NLDS, ALCS/NLCS, World Series — not in the PDF yet"
+  },
+  "CFB": {
+    "CFB Week 1": null,
+    "CFB Week 2": null,
+    "CFB Week 3": null,
+    "CFB Week 4": null,
+    "CFB Week 5": null,
+    "CFB Week 6": null,
+    "CFB Week 7": null,
+    "CFB Week 8": null,
+    "CFB Week 9": null,
+    "CFB Week 10": null,
+    "CFB Week 11": null,
+    "CFB Week 12": null,
+    "CFB Week 13": null,
+    "CFB Week 14": null,
+    "CFB Week 15": null,
+    "CFP": null
+  },
+  "WNBA": {
+    "WNBA Playoffs": null,
+    "WNBA Finals": null
+  },
+  "NHL": {
+    "NHL Opening Night": null
+  }
+}

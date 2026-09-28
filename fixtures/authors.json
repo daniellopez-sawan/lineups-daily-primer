@@ -1,0 +1,10 @@
+{
+  "_note": "Author id → display name, lineups.com. The users collection endpoint is 404 on the site, so each unknown id costs one WebFetch. Look here first; fetch only ids missing here; append what you learn.",
+  "195": "unknown — fetch",
+  "200": "Juan Carlos Blanco",
+  "201": "John Haslbauer",
+  "202": "Frank Ammirante",
+  "234": "Richard Janvrin",
+  "236": "Thom Cunningham",
+  "238": "Anthony Blanco"
+}
