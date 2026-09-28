@@ -1,4 +1,4 @@
-# Lineups Daily Primer — skill
+# Lineups Daily Primer — Claude Code skill
 
 Guided assistant that builds the Lineups Daily Primer email in Customer.io from articles tagged
 on lineups.com. Everything the agent needs is in `SKILL.md`; the two scripts are the deterministic

@@ -37,19 +37,26 @@ sentences. One question at a time. Speak the language the person uses.
 
 ## Fixed facts (do not ask the person for these)
 
+Only three things live in this file. **Everything else comes from the snippet `dailyprimer_config`**
+in Customer.io, read once in §1 — so audience, template and base broadcast can change without
+touching this skill.
+
 | | |
 |---|---|
 | Site | `https://www.lineups.com` (LSR / Gaming Today later, by config) |
 | Customer.io environment id | `154686` — the same number as the Lineups.com workspace. Use it in every `/v1/environments/{environment_id}/…` path |
 | Snippet prefix | `dailyprimer_` |
-| Template (Design Studio email) | `0bfbb3ea-6b50-4818-9ac7-83d80b1a1230` — Vivien's, 4 article blocks each hidden when its title snippet is `<!-- empty -->` |
-| Base broadcast | newsletter **`201`** "Lineups Daily Primer — BASE (do not send)". Every send is a copy of it. Stays `drafted` forever |
-| Audience (set on **every** copy — copies do not inherit it) | `filters` = `JTVCJTdCJTIybmVnYXRlJTIyJTNBZmFsc2UlMkMlMjJzZWdtZW50cyUyMiUzQSU1QjE4NSUyQzMzOSU1RCUyQyUyMnR5cGUlMjIlM0ElMjJzZWdtZW50c19uZWdhdGFibGUlMjIlN0QlNUQ=` — decodes to segments **185** "Opened by a Human in the Past 180 days" + **339** "Created in Customer.io in the past 180 days". `subscription_topic_id` `"6"`, `send_percentage` 100, `send_to_unsubscribed` false, `deduped` false, `use_message_limits` false |
-| Sender | identity `3` — Lineups.com `<noreply@send.lineups.com>` (already on the template) |
-| Articles per send | 2–4. Unused slots get the sentinel `<!-- empty -->` (Customer.io refuses empty values) |
-| Test recipients | **Always ask** — there is no default list. Before every test: *"Who should get the test? Type the email addresses, comma-separated."* Remember the answer for the rest of the session and offer it back next time (*"same as before — {list} — or different?"*). Known addresses if someone asks: Daniel `daniel.lopez@catenamedia.com`, Kenny `kenneth.pordon@catenamedia.com` |
-| Timezone | America/New_York for every plan time |
-| Automatic routine | **Not switched on.** A person builds each send. When that changes, this row changes |
+
+`dailyprimer_config` (JSON) provides: `template_id` (the Design Studio email — 4 article blocks,
+each hidden when its title snippet is `<!-- empty -->`), `base_broadcast_id` (the stencil every
+send is copied from; stays `drafted` forever), `sender_identity_id`, `audience` (the `filters`
+blob, `subscription_topic_id`, `send_percentage`, the four booleans, and the segment names for
+display), `header_text`, `known_addresses`, `ignore_broadcast_names`. Refer to these as
+`config.<key>` below. Articles per send: 2–4; unused slots get `<!-- empty -->` (Customer.io
+refuses empty values). Test recipients: **always ask** — *"Who should get the test? Type the
+email addresses, comma-separated"*; remember the answer for the session and offer it back next
+time. Timezone: America/New_York for every plan time. **Automatic routine: not switched on** — a
+person builds each send.
 
 **Who does what**
 - **Thom** — one job: in WordPress, put the exact event tag (`TNF`, `SNF`, `MNF`, `MLB Wild Card`, …) on each article that belongs in that send. He does not plan or build.
@@ -99,21 +106,25 @@ Say the permission line from ground rule 3, then check. Each item is ✅ or a pl
    **robots** → STOP: *"This chat isn't allowed to read the site's articles. Use the **Code** tab
    in Claude Desktop — the regular chat can't. If you are in the Code tab and still see this, tell
    Daniel."* Any other failure → STOP, quote the error, ping Daniel.
-3. **Snippets** — `cio_read_api GET /v1/environments/154686/snippets` with `page_all: true`; keep a
-   name→id map. Required names: `dailyprimer_header1_text`, `_subjectline1`, `_subjectline2`,
-   `_preheader1`, `_plan`, and `_article1..4_{title,page,image,text,author}` (25). `_lastsent_ids`
-   appears after the first build (26). Any required name missing → say which; the article ones are
+3. **Snippets + config** — `cio_read_api GET /v1/environments/154686/snippets` with `page_all: true`;
+   keep a name→id map. Parse `dailyprimer_config`'s `.value` as JSON → **`config`**, used everywhere
+   below; missing or unparsable → STOP: *"The configuration snippet is missing — nothing can run.
+   Ping Daniel."* Required names: `dailyprimer_config`, `_header1_text`, `_subjectline1`,
+   `_subjectline2`, `_preheader1`, `_plan`, and `_article1..4_{title,page,image,text,author}` (26).
+   `_lastsent_ids` appears after the first build (27). Any required name missing → say which; the article ones are
    recreated on the next build; a missing `_plan` → ask: *"create an empty plan, or skip and
    preview the latest articles?"* — do not create it silently.
-4. **Template** — `GET /v1/environments/154686/design_studio/emails/0bfbb3ea-…`:
+4. **Template** — `GET /v1/environments/154686/design_studio/emails/{config.template_id}`:
    `.content.subject` and `.content.preheader_text` reference `dailyprimer_`; `.content.html`
-   contains `{% if snippets.dailyprimer_article1_title`; `.envelope.from_id` is `3`. A wrong
-   sender → report it and ask whether to set it to Lineups.com — only on yes, and say it edits
-   the template. `…/unpublished_changes` true → mention it (tests render the
+   contains `{% if snippets.dailyprimer_article1_title`; `.envelope.from_id` equals
+   `config.sender_identity_id`. A wrong sender → report it and ask whether to set it — only on
+   yes, and say it edits the template. `…/unpublished_changes` true → mention it (tests render the
    published version) and move on.
-5. **Base broadcast** — `GET /v1/environments/154686/newsletters/201`: name contains "BASE",
-   `send_state` `drafted`; `…/201/segments` returns 2. Anything else → STOP, ping Daniel.
-6. **Anything already waiting to go?** — list newsletters; any (other than 201) whose name contains
+5. **Base broadcast** — `GET /v1/environments/154686/newsletters/{config.base_broadcast_id}`: name
+   contains "BASE", `send_state` `drafted`; `…/segments` returns as many segments as
+   `config.audience.segments`. Anything else → STOP, ping Daniel.
+6. **Anything already waiting to go?** — list newsletters; any (other than the base, and ignoring
+   names starting with any of `config.ignore_broadcast_names`) whose name contains
    "Lineups Daily Primer" with `send_state` `scheduled`, `sending`, `paused` or `awaiting_winner`
    → remember it. It blocks any snippet write (§4 step 0) but not Preview.
 7. **Today's plan** — read `dailyprimer_plan` (parse `.value` as JSON; `<!-- empty -->` or
@@ -230,7 +241,7 @@ will read; **for a test:** first ask *"Who should get the test? Type the email a
 comma-separated"* (or offer the session's previous list back), then show the list you'll use;
 **for a build:** the
 broadcast name `{D/M/YY} Lineups Daily Primer — {entry name}` and *"Scheduled for **{weekday}
-{date}, {time} ET** — at that time it goes to the audience (segments 185 + 339). Until then you
+{date}, {time} ET** — at that time it goes to the audience ({config.audience.segments names}). Until then you
 can cancel or move it in Customer.io → Broadcasts."* If the entry is still `draft`, say you'll
 confirm it in the plan as part of this (or continue without touching the plan if they prefer).
 Then: *"Reply **go** to proceed, or tell me what to change (subject, articles, time, recipients)."*
@@ -255,7 +266,7 @@ written — I've stopped so nothing half-built goes out. Ping Daniel."*
 
 ### Send a test
 **Step 4.** `cio_write_api POST /v1/environments/154686/verify/email_template` body
-`{"node_id":"0bfbb3ea-6b50-4818-9ac7-83d80b1a1230","to":"<comma-separated recipients>",
+`{"node_id":"{config.template_id}","to":"<comma-separated recipients>",
 "prepend_test":true,"campaign_type":"newsletter"}`. Report the rendered `subject`.
 `accepted: true` = handed to delivery, not delivered; test sends do not appear in `/deliveries`.
 Nothing within a few minutes → Junk folder, then the Microsoft 365 quarantine.
@@ -263,8 +274,8 @@ Nothing within a few minutes → Junk folder, then the Microsoft 365 quarantine.
 Then: *"Next: build & schedule it, or leave it here?"*
 
 ### Build & schedule
-**Step 4.** Copy the base: `cio_write_api POST /v1/environments/154686/newsletters/201/copy` body
-`{"copy_to_env":154686}` → NEW id. Always 201, never "the most recent Primer".
+**Step 4.** Copy the base: `cio_write_api POST /v1/environments/154686/newsletters/{config.base_broadcast_id}/copy`
+body `{"copy_to_env":154686}` → NEW id. Always the base, never "the most recent Primer".
 **Step 5.** Lock it in the plan **now**: `plan.mjs` `op: mark_built` with `date`, `name`,
 `broadcast_id: NEW`, `subject`, `actor`, and `expect_updated_at` = the `updated_at` you last saw;
 PUT `dailyprimer_plan` back; read it back. Refused because already built → someone got there
@@ -274,10 +285,11 @@ first: rename yours `[DUPLICATE — do not send] …` (`update_type: main`) and 
 **Step 7.** Rename: `PUT /v1/environments/154686/newsletters/{NEW}` body
 `{"newsletter":{"update_type":"main","name":"{D/M/YY} Lineups Daily Primer — {entry name}","send_percentage":100}}`.
 **Step 8.** Audience — required, a copy has none: `PUT …/newsletters/{NEW}` body
-`{"newsletter":{"update_type":"recipients","send_percentage":100,"send_to_unsubscribed":false,
-"deduped":false,"use_message_limits":false,"subscription_topic_id":"6","filters":"<the filters
-string from Fixed facts>"}}`. Verify `GET …/newsletters/{NEW}/segments` returns **2**. Anything
-else → STOP, ping Kenny.
+`{"newsletter":{"update_type":"recipients","send_percentage":config.audience.send_percentage,
+"send_to_unsubscribed":…,"deduped":…,"use_message_limits":…,"subscription_topic_id":
+config.audience.subscription_topic_id,"filters":config.audience.filters}}` — every value from
+`config.audience`. Verify `GET …/newsletters/{NEW}/segments` returns exactly the segments in
+`config.audience.segments`. Anything else → STOP, ping Kenny.
 **Step 9.** Schedule. Time = the plan entry's `date` + `send_at` in America/New_York unless the
 person chose another at the confirmation. Compute the epoch **with a command, never by hand**:
 `TZ=America/New_York node -e 'console.log(Math.floor(new Date("YYYY-MM-DDTHH:MM:00").getTime()/1000))'`
@@ -340,7 +352,7 @@ refuses and you show it again.
 ## 5 · Check what went out
 
 Read `dailyprimer_lastsent_ids` and list newsletters whose name contains "Lineups Daily Primer",
-excluding 201 and any `[SCRATCH…]`. Show date, name, `send_state`, `sent_at` (ET), and the
+excluding the base and any name starting with an entry of `config.ignore_broadcast_names`. Show date, name, `send_state`, `sent_at` (ET), and the
 headlines if available. Test sends are not logged anywhere — only broadcasts appear here.
 
 ---
@@ -365,19 +377,19 @@ Common questions:
   sending — the template reads the snippets at send time.
 - *"Will it repeat yesterday's articles?"* — It skips anything already sent. Set `allow_repeats`
   on the entry if a series (Wild Card G1 → G2) should re-use pieces.
-- *"Who does it send to?"* — the same audience as the manual Primer: opened an email in the last
-  180 days, or created in the last 180 days.
+- *"Who does it send to?"* — the segments named in `config.audience.segments` (the same audience
+  the manual Primer used).
 - *"Can I change how it looks?"* — Vivien, in Customer.io. This never touches design.
 - *"The test looks old"* — it was sent before the snippets were written. Run test again.
 
 ---
 
-## 7 · Template checklist (Vivien) — reference only, all done as of 2026-09-22
+## 7 · Template checklist (Vivien) — reference only
 
 Four blocks, each shown only when `snippets.dailyprimer_articleN_title` ≠ `<!-- empty -->`;
 blocks bound to `dailyprimer_articleN_{title,page,image,text,author}`; header
 `dailyprimer_header1_text`; subject `{{snippets.dailyprimer_subjectline1}}`; preheader
-`{{snippets.dailyprimer_preheader1}}`; sender identity 3. The subject/preheader fields are not in
+`{{snippets.dailyprimer_preheader1}}`; sender `config.sender_identity_id`. The subject/preheader fields are not in
 the canvas — the API sets them (`PUT …/design_studio/emails/{id}` with `content.subject` /
 `content.preheader_text`; omitted fields are preserved). Never publish the template to a copy.
 
@@ -408,7 +420,7 @@ together in one turn. Never fetch more than needed.
 ## B · Map (deterministic — always the script, never by hand)
 
 Pipe `{posts, media (keyed by id), users (keyed by id), config}` into `scripts/map.mjs` (absolute
-path). Config: `prefix` `"dailyprimer_"`, `headerText` `"Lineups Daily Primer"`, `minSlots` =
+path). Config: `prefix` `"dailyprimer_"`, `headerText` = `config.header_text`, `minSlots` =
 entry `min_articles` (never below 2), `maxSlots` = `max_articles`, `alreadySent` = ids from
 `lastsent_ids`, `allowRepeats` = entry `allow_repeats`, `requireTagIds` = resolved tag ids when
 `match: all` (else `[]`), `sendDate` = `"{date}T{send_at}:00-04:00"` (−05:00 after the November
