@@ -89,13 +89,12 @@ but always run the readiness check (§1) first and surface any problem before ac
 
 Say the permission line from ground rule 3, then check. Each item is ✅ or a plain ❌ with the fix.
 
-0. **Self-update, then can I run the scripts?** — first, quietly:
-   `git -C "<skill dir>" pull --ff-only --quiet` (run it with a 15-second tool timeout — macOS has
-   no `timeout` command). If it updated, say once: *"I picked
-   up a newer version of this assistant — carrying on."* If it fails (no network, not a git
-   checkout, auth) → ignore and continue with what is installed; never block on it. If the
-   failure is **`git` not installed**, say once: *"Updates are off on this Mac until git is
-   installed — run `xcode-select --install` in Terminal when you have a minute. Not needed today."*
+0. **Self-update, then can I run the scripts?** — first, quietly run
+   `sh "<skill dir>/scripts/update.sh"` (15-second tool timeout — macOS has no `timeout` command).
+   It needs nothing but curl and tar, which every Mac has, and always exits 0. Read its one line:
+   `updated to …` → say once *"I picked up a newer version of this assistant — carrying on."*;
+   `already up to date` → say nothing; `update check skipped: …` → say nothing, continue with
+   what is installed. Never block on it, never run git.
    Then `node --version` (need v18+). Then
    `node "<skill dir>/scripts/map.mjs" < "<skill dir>/fixtures/sample-2026-09-15.json"` must print
    `"ok": true`. Missing node → STOP: *"One small install is needed first: Node.js isn't on this
