@@ -93,7 +93,9 @@ Say the permission line from ground rule 3, then check. Each item is ✅ or a pl
    `git -C "<skill dir>" pull --ff-only --quiet` (run it with a 15-second tool timeout — macOS has
    no `timeout` command). If it updated, say once: *"I picked
    up a newer version of this assistant — carrying on."* If it fails (no network, not a git
-   checkout, auth) → ignore and continue with what is installed; never block on it.
+   checkout, auth) → ignore and continue with what is installed; never block on it. If the
+   failure is **`git` not installed**, say once: *"Updates are off on this Mac until git is
+   installed — run `xcode-select --install` in Terminal when you have a minute. Not needed today."*
    Then `node --version` (need v18+). Then
    `node "<skill dir>/scripts/map.mjs" < "<skill dir>/fixtures/sample-2026-09-15.json"` must print
    `"ok": true`. Missing node → STOP: *"One small install is needed first: Node.js isn't on this
@@ -102,10 +104,17 @@ Say the permission line from ground rule 3, then check. Each item is ✅ or a pl
 1. **Customer.io connection** — `cio_auth_status`; `154686` must be in `allowed_workspace_ids`.
    Not connected / wrong workspace → §1a.
 2. **Can I reach the site?** — WebFetch
-   `https://www.lineups.com/wp-json/wp/v2/posts?per_page=1&_fields=id`. If the error mentions
-   **robots** → STOP: *"This chat isn't allowed to read the site's articles. Use the **Code** tab
-   in Claude Desktop — the regular chat can't. If you are in the Code tab and still see this, tell
-   Daniel."* Any other failure → STOP, quote the error, ping Daniel.
+   `https://www.lineups.com/wp-json/wp/v2/posts?per_page=1&_fields=id`.
+   - Error mentions **robots** → STOP: *"This chat isn't allowed to read the site's articles. Use
+     the **Code** tab in Claude Desktop — the regular chat can't. If you are in the Code tab and
+     still see this, tell Daniel."*
+   - **403 / Forbidden / "Attention Required"** → the site's bot protection rejected the fetch
+     from this machine. **Switch to the browser route for the rest of this run** (§A "Browser
+     route"): open the same URL with the Browser tool (`navigate`, then `get_page_text`). If that
+     returns the JSON, say *"The site blocks direct fetches from here, so I'm reading it through
+     the built-in browser instead — slightly slower, same result."* and carry on. If the browser
+     fails too → STOP, quote the error, ping Daniel.
+   - Any other failure → STOP, quote the error, ping Daniel.
 3. **Snippets + config** — `cio_read_api GET /v1/environments/154686/snippets` with `page_all: true`;
    keep a name→id map. Parse `dailyprimer_config`'s `.value` as JSON → **`config`**, used everywhere
    below; missing or unparsable → STOP: *"The configuration snippet is missing — nothing can run.
@@ -395,9 +404,15 @@ the canvas — the API sets them (`PUT …/design_studio/emails/{id}` with `cont
 
 ---
 
-## A · Fetch (WebFetch only — the network step)
+## A · Fetch (the network step)
 
-Ask WebFetch for *"the raw JSON exactly, no commentary"*. **If a response is not a JSON array
+**Default: WebFetch.** Ask for *"the raw JSON exactly, no commentary"*.
+
+**Browser route** (when §1 item 2 hit a 403, or WebFetch 403s mid-run): for every URL below use
+the Browser tool instead — `navigate` to the URL, then `get_page_text` (raise `max_chars` to
+~60000 for the posts and media calls). The page text *is* the raw JSON; parse it as-is. Same URLs,
+same fields, same rules. Do not fall back to curl or a script — Cloudflare blocks those from a
+laptop. Stay on the browser route for the whole run once you've switched. **If a response is not a JSON array
 whose items have numeric `id`s, refetch once with `&_cb=<epoch>`; if it still isn't, STOP** —
 never rebuild a list from prose. Issue posts first, then media + missing authors + the plan read
 together in one turn. Never fetch more than needed.
