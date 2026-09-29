@@ -106,7 +106,10 @@ Say the permission line from ground rule 3, then check. Each item is ✅ or a pl
    It needs nothing but curl and tar, which every Mac has, and always exits 0. Read its one line:
    `updated to …` → say once *"I picked up a newer version of this assistant — carrying on."*;
    `already up to date` → say nothing; `update check skipped: …` → say nothing, continue with
-   what is installed. Never block on it, never run git.
+   what is installed. Never block on it, never run git. Then read `<skill dir>/.version` and
+   include its first 7 characters in the readiness block as *"Assistant version: abc1234"* — that
+   is how Daniel tells old copies apart. Missing file → *"Assistant version: unknown (old copy —
+   tell Daniel)"*.
    Then `node --version` (need v18+). Then
    `node "<skill dir>/scripts/map.mjs" < "<skill dir>/fixtures/sample-2026-09-15.json"` must print
    `"ok": true`. Missing node → STOP: *"One small install is needed first: Node.js isn't on this
