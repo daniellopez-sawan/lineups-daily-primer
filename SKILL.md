@@ -51,18 +51,30 @@ touching this skill.
 each hidden when its title snippet is `<!-- empty -->`), `base_broadcast_id` (the stencil every
 send is copied from; stays `drafted` forever), `sender_identity_id`, `audience` (the `filters`
 blob, `subscription_topic_id`, `send_percentage`, the four booleans, and the segment names for
-display), `header_text`, `known_addresses`, `ignore_broadcast_names`. Refer to these as
+display), `header_text`, `test_recipients`, `known_addresses`, `ignore_broadcast_names`,
+`broadcast_url` (a pattern with `{id}` for the Customer.io page of a broadcast). Refer to these as
 `config.<key>` below. Articles per send: 2–4; unused slots get `<!-- empty -->` (Customer.io
-refuses empty values). Test recipients: **always ask** — *"Who should get the test? Type the
-email addresses, comma-separated"*; remember the answer for the session and offer it back next
-time. Timezone: America/New_York for every plan time. **Automatic routine: not switched on** — a
+refuses empty values). Test recipients: **`config.test_recipients`, always** — every test goes
+to that whole list, so the people who check Customer.io know a send is coming without being
+told. Show the list on the confirmation card; the person may add addresses for this one test,
+never remove any. Empty list → ask for addresses and tell them to ping Daniel to fix the list.
+Timezone: America/New_York for every plan time. **Automatic routine: not switched on** — a
 person builds each send.
 
-**Who does what**
-- **Thom** — one job: in WordPress, put the exact event tag (`TNF`, `SNF`, `MNF`, `MLB Wild Card`, …) on each article that belongs in that send. He does not plan or build.
-- **Kenny / Alvin** — plan and confirm sends, run Build, own the schedule.
+**Who you are** (the `actor`): the email `cio_auth_status` reports for the connected account.
+If it reports none, ask *"Which email do you use for Customer.io?"* once and keep it for the
+session. Every plan write is stamped with it — that is how the team sees who did what.
+
+**Who does what** (agreed on the 28 Sep 2026 call)
+- **Thom / Patrick (Lineups content)** — own it: tag the articles in WordPress (exact event tag —
+  `TNF`, `SNF`, `MNF`, `MLB Wild Card`, …), pick/swap articles, send the test, build & schedule.
+  One of them is the **owner of the week** (§4c); the other covers.
+- **Kenny / Vivien / Alvin** — get every test email, then only check the broadcast in
+  Customer.io: is it scheduled, does it look normal. They can take over if both owners are out.
 - **Vivien** — the template. Never edits `dailyprimer_*` snippets by hand.
+- **Joe** — gets the test email.
 - **Daniel** — anything that says "stop" and you don't know why.
+- **Anyone** may Preview at any time — it writes nothing.
 
 ---
 
@@ -75,7 +87,7 @@ Do not launch into work. One line of welcome, then the menu:
 > 1. **Preview** today's send — writes nothing
 > 2. **Send a test** email
 > 3. **Build & schedule** the broadcast
-> 4. **Plan the week**
+> 4. **Plan the week / set the owner**
 > 5. **Check** what went out
 > 6. **First time here?** — 5-minute walkthrough
 > 7. **Understand / settings**
@@ -102,17 +114,15 @@ Say the permission line from ground rule 3, then check. Each item is ✅ or a pl
    Nothing here can run without it — tell Daniel if you'd like help."*
 1. **Customer.io connection** — `cio_auth_status`; `154686` must be in `allowed_workspace_ids`.
    Not connected / wrong workspace → §1a.
-2. **Can I reach the site?** — WebFetch
-   `https://www.lineups.com/wp-json/wp/v2/posts?per_page=1&_fields=id`.
-   - Error mentions **robots** → STOP: *"This chat isn't allowed to read the site's articles. Use
-     the **Code** tab in Claude Desktop — the regular chat can't. If you are in the Code tab and
-     still see this, tell Daniel."*
-   - **403 / Forbidden / "Attention Required"** → the site's bot protection rejected the fetch
-     from this machine. **Switch to the browser route for the rest of this run** (§A "Browser
-     route"): open the same URL with the Browser tool (`navigate`, then `get_page_text`). If that
-     returns the JSON, say *"The site blocks direct fetches from here, so I'm reading it through
-     the built-in browser instead — slightly slower, same result."* and carry on. If the browser
-     fails too → STOP, quote the error, ping Daniel.
+2. **Can I reach the site?** — with the **built-in Browser tool only** (§A): `navigate` to
+   `https://www.lineups.com/wp-json/wp/v2/posts?per_page=1&_fields=id`, then `get_page_text`.
+   The text must be a JSON array like `[{"id":249252}]`.
+   - Browser tool not available in this chat (no `navigate` tool) → STOP: *"This chat has no
+     built-in browser, and the site only answers through it. Use the **Code** tab in Claude
+     Desktop and start a new chat there. If you are already in the Code tab, tell Daniel."*
+   - The page shows **403 / Forbidden / "Attention Required" / "Just a moment"** → wait 5
+     seconds and load it once more. Still blocked → STOP, quote the page's first line, ping
+     Daniel. Never fall back to WebFetch, curl or a script — that is what the site blocks.
    - Any other failure → STOP, quote the error, ping Daniel.
 3. **Snippets + config** — `cio_read_api GET /v1/environments/154686/snippets` with `page_all: true`;
    keep a name→id map. Parse `dailyprimer_config`'s `.value` as JSON → **`config`**, used everywhere
@@ -136,11 +146,17 @@ Say the permission line from ground rule 3, then check. Each item is ✅ or a pl
    "Lineups Daily Primer" with `send_state` `scheduled`, `sending`, `paused` or `awaiting_winner`
    → remember it. It blocks any snippet write (§4 step 0) but not Preview.
 7. **Today's plan** — read `dailyprimer_plan` (parse `.value` as JSON; `<!-- empty -->` or
-   unparsable = no plan), run `plan.mjs` `op: today`. Note today's entries, their status, and
-   whether the send time is already past or under 30 minutes away.
+   unparsable = no plan). **Reconcile first:** for every entry with `built` but no
+   `built.sent_at`, `GET …/newsletters/{built.broadcast_id}`; `send_state` `sent` → `plan.mjs`
+   `op: mark_sent` and PUT the plan back (silently — it is bookkeeping). Then run `op: today`.
+   Note today's entries, their status, who built what (`built.by`), and whether the send time is
+   already past or under 30 minutes away. Note `plan.owner` (the owner of the week, §4c).
 
-Then say what is possible right now, e.g. *"All good. Today's plan has **MNF** at 6:00 PM ET
-(confirmed). Preview, test and build are all ready."*
+Then say what is possible right now, e.g. *"All good. This week **Patrick** owns the sends.
+Today's plan has **MLB Wild Card** at 11:00 AM ET (draft — I'll confirm it when you build).
+Yesterday's MNF went out at 12:00 PM (built by Patrick). Preview, test and build are all ready."*
+If the actor is not the owner and there is one, add: *"You're not this week's owner — preview is
+always fine; if you build, I'll ask whether you're covering for them."*
 
 ---
 
@@ -214,7 +230,7 @@ articles; if there should be a fourth, it may not be tagged yet."* That is Thom'
 
 **Tag doesn't exist / nothing tagged** (§A step 0 found no exact match) → offer: 1. use the
 latest articles in that sport instead · 2. pick from the latest 8 · 3. re-check now (Thom may be
-tagging — refetch with `&_cb=<epoch>`, WebFetch caches ~15 min).
+tagging — refetch with `&_cb=<epoch>` so no cache is involved).
 
 **Staleness** (not automated): game previews, "picks today", props and DFS pieces are dead after
 kickoff. Flag any chosen article that previews a game already played, or a "today" piece not
@@ -242,11 +258,19 @@ not for a build — no exceptions.
 
 **Step 0b — already built today?** If the plan entry shows `built`, or a broadcast named
 "{D/M/YY} Lineups Daily Primer — {name}" already exists in `drafted`/`scheduled` → ask: 1. use the
-existing one (#NNN) · 2. build another anyway · 3. cancel.
+existing one (#NNN, built by {built.by}) · 2. build another anyway · 3. cancel.
+
+**Step 0c — is it yours to build?** (build only, not test). If `plan.owner` is set and is not
+the actor → ask: *"**{owner}** owns the sends this week. 1. I'm covering for them — take over
+(the plan will show you as owner from now) · 2. just this once, leave them as owner · 3. stop."*
+1 → `plan.mjs` `op: set_owner` with `owner: actor` (say who it was before). 2 → continue. 3 →
+stop. No owner set → continue, and after the build offer once: *"Want to be marked as this
+week's owner so others know to leave it to you? yes / no."*
 
 **Confirmation card** (before any write): the chosen headlines; the subject and preheader as they
-will read; **for a test:** first ask *"Who should get the test? Type the email addresses,
-comma-separated"* (or offer the session's previous list back), then show the list you'll use;
+will read; **for a test:** show `config.test_recipients` as the list you'll use — *"The test goes
+to: … Reply **go**, or type extra addresses to add for this one."* (extras are added, never
+replace the list; empty config list → ask for addresses, and say Daniel should fix the list);
 **for a build:** the
 broadcast name `{D/M/YY} Lineups Daily Primer — {entry name}` and *"Scheduled for **{weekday}
 {date}, {time} ET** — at that time it goes to the audience ({config.audience.segments names}). Until then you
@@ -285,7 +309,7 @@ Then: *"Next: build & schedule it, or leave it here?"*
 **Step 4.** Copy the base: `cio_write_api POST /v1/environments/154686/newsletters/{config.base_broadcast_id}/copy`
 body `{"copy_to_env":154686}` → NEW id. Always the base, never "the most recent Primer".
 **Step 5.** Lock it in the plan **now**: `plan.mjs` `op: mark_built` with `date`, `name`,
-`broadcast_id: NEW`, `subject`, `actor`, and `expect_updated_at` = the `updated_at` you last saw;
+`broadcast_id: NEW`, `subject`, `actor` (recorded as `built.by`), and `expect_updated_at` = the `updated_at` you last saw;
 PUT `dailyprimer_plan` back; read it back. Refused because already built → someone got there
 first: rename yours `[DUPLICATE — do not send] …` (`update_type: main`) and STOP.
 **Step 6.** `GET /v1/environments/154686/newsletters/{NEW}/templates` — body must contain
@@ -315,7 +339,10 @@ if missing).
 
 **Report, naming the end state exactly:** *"Broadcast #NEW "{name}" is **scheduled for {weekday}
 {time} ET** — it goes to the audience then unless someone cancels it in Customer.io → Broadcasts.
-The plan shows it as built, so it won't be built twice. Articles: … Subject: …"*
+The plan shows it as built by you, so it won't be built twice. Articles: … Subject: …
+Customer.io: {config.broadcast_url with {id} → NEW}"*
+Then give a ready-to-paste line for the Slack channel, in a code block:
+`Scheduled: {name} — {weekday} {time} ET — {config.broadcast_url with NEW} — test sent to the usual list.`
 
 ---
 
@@ -332,7 +359,7 @@ Entry: `date` · `send_at` (24h, America/New_York) · `name` · `tags` (exact Wo
 **Always go through `scripts/plan.mjs`** — never hand-edit the JSON. Read the snippet, pipe
 `{plan, op, …, actor, vocabulary: fixtures/event-tags.json, expect_updated_at}` in, PUT the
 returned `plan` back, read it back and show it. Ops: `show`, `set` (upsert by date+name),
-`remove`, `confirm`, `today`, `mark_built`, `mark_sent`.
+`remove`, `confirm`, `today`, `mark_built`, `mark_sent`, `set_owner`.
 
 **Flow**
 1. Show the plan as a table: date · time ET · name · tags · articles · status (⏳ draft, ✅
@@ -357,10 +384,24 @@ refuses and you show it again.
 
 ---
 
+## 4c · Owner of the week (passing the ball)
+
+The plan carries `owner` — the email of the person who builds the sends right now. It is a
+signal, not a lock: anyone can still build (§4 step 0c asks first), so a sick day never blocks a
+send. Menu 4 offers **"Set the owner"**: show the current owner, then *"Who owns the sends from
+now? 1. me · 2. someone else (type the email) · 3. nobody (clear)"* → `plan.mjs` `op: set_owner`
+with `owner` (email or empty) and `expect_updated_at`, PUT the plan, read it back. Say it in
+words: *"Patrick owns it from now — everyone's readiness check will say so."* Hand-over is that
+one step; nothing else changes hands (the plan, the snippets and the broadcasts all live in
+Customer.io, not on anyone's Mac).
+
+---
+
 ## 5 · Check what went out
 
 Read `dailyprimer_lastsent_ids` and list newsletters whose name contains "Lineups Daily Primer",
-excluding the base and any name starting with an entry of `config.ignore_broadcast_names`. Show date, name, `send_state`, `sent_at` (ET), and the
+excluding the base and any name starting with an entry of `config.ignore_broadcast_names`. Show date, name, `send_state`, `sent_at` (ET), `total_sent`/`total_delivered`, who built it
+(`built.by` from the plan, else `updated_by_user.email`), the Customer.io link (`config.broadcast_url`), and the
 headlines if available. Test sends are not logged anywhere — only broadcasts appear here.
 
 ---
@@ -405,15 +446,14 @@ the canvas — the API sets them (`PUT …/design_studio/emails/{id}` with `cont
 
 ## A · Fetch (the network step)
 
-**Default: WebFetch.** Ask for *"the raw JSON exactly, no commentary"*.
-
-**Browser route** (when §1 item 2 hit a 403, or WebFetch 403s mid-run): for every URL below use
-the Browser tool instead — `navigate` to the URL, then `get_page_text` (raise `max_chars` to
-~60000 for the posts and media calls). The page text *is* the raw JSON; parse it as-is. Same URLs,
-same fields, same rules. Do not fall back to curl or a script — Cloudflare blocks those from a
-laptop. Stay on the browser route for the whole run once you've switched. **If a response is not a JSON array
-whose items have numeric `id`s, refetch once with `&_cb=<epoch>`; if it still isn't, STOP** —
-never rebuild a list from prose. Issue posts first, then media + missing authors + the plan read
+**Only one method: the built-in Browser tool.** For every URL below: `navigate` to the URL, then
+`get_page_text` (set `max_chars` to 60000 for the posts and media calls). The page text *is* the
+raw JSON; parse it as-is. The site's bot protection accepts the browser and blocks everything
+else — **never** WebFetch, curl, node or any script for these URLs, even if one happens to
+work today. Several URLs can go in one `browser_batch` (navigate, get_page_text, navigate,
+get_page_text …). **If a response is not a JSON array whose items have numeric `id`s** (blank
+page, "Just a moment", 403), wait 5 seconds and load it once more with `&_cb=<epoch>`; if it
+still isn't, STOP and quote the page's first line — never rebuild a list from prose. Issue posts first, then media + missing authors + the plan read
 together in one turn. Never fetch more than needed.
 
 0. **Tags → ids** (plan-driven): for each tag name
@@ -426,7 +466,7 @@ together in one turn. Never fetch more than needed.
    `&categories=<ids>&per_page={max+3}`. Never `_embed` with `_fields` (drops `_embedded`), never
    without (pulls full bodies).
 2. **Media** — `{site}/wp-json/wp/v2/media?include=<ids>&_fields=id,alt_text,source_url,media_details`.
-3. **Authors** — `fixtures/authors.json` first (ignore entries marked "unknown"); WebFetch only
+3. **Authors** — `fixtures/authors.json` first (ignore entries marked "unknown"); load only
    missing ids, one each: `{site}/wp-json/wp/v2/users/<id>?_fields=id,name`. Append what you learn
    (best-effort).
 4. **Already sent** — `dailyprimer_lastsent_ids` (missing = none).

@@ -23,14 +23,16 @@
  *     min_articles: 2, max_articles: 4, include_hub_pages: false,
  *     status: "draft"|"confirmed", notes: "", allow_repeats: false,
  *     built: { broadcast_id: "123", at: ISO, subject: "...", sent_at?: ISO } | absent }
- * ops also: "mark_sent" (records built.sent_at once Customer.io reports send_state "sent").
+ * ops also: "mark_sent" (records built.sent_at once Customer.io reports send_state "sent"),
+ *   "set_owner" { owner: email | "" } — plan.owner is the person building the sends this week (a signal, not a lock).
+ * mark_built records built.by = actor.
  * Optimistic check: pass "expect_updated_at" on any write op; refused if the plan changed since.
  * The routine executes only status === "confirmed". Everything else is visible but inert.
  */
 const TZ = "America/New_York";
 const DATE = /^\d{4}-\d{2}-\d{2}$/, TIME = /^([01]\d|2[0-3]):[0-5]\d$/;
 
-const emptyPlan = () => ({ version: 1, timezone: TZ, updated_by: "", updated_at: "", sends: [] });
+const emptyPlan = () => ({ version: 1, timezone: TZ, owner: "", updated_by: "", updated_at: "", sends: [] });
 
 function validateEntry(e, vocab) {
   const p = [], w = [];
@@ -66,6 +68,7 @@ function main(input) {
   const { op, actor = "", now = new Date().toISOString(), vocabulary = null } = input;
   const plan = input.plan && typeof input.plan === "object" ? input.plan : emptyPlan();
   plan.sends ??= [];
+  plan.owner ??= "";
   const warnings = [], problems = [];
   const key = (e) => `${e.date}|${e.name}`;
   const stamp = () => { plan.updated_by = actor; plan.updated_at = now; };
@@ -73,7 +76,7 @@ function main(input) {
   const seen = new Set();
   for (const e of plan.sends) { const k = key(e); if (seen.has(k)) warnings.push(`duplicate entry ${k} — only the first is acted on`); seen.add(k); }
   for (const e of plan.sends) if (e.status === "confirmed" && !e.built && e.date < today0) warnings.push(`missed: ${e.date} ${e.name} was confirmed but never built`);
-  if (["set", "remove", "confirm", "mark_built", "mark_sent"].includes(op) && input.expect_updated_at && plan.updated_at && input.expect_updated_at !== plan.updated_at)
+  if (["set", "remove", "confirm", "mark_built", "mark_sent", "set_owner"].includes(op) && input.expect_updated_at && plan.updated_at && input.expect_updated_at !== plan.updated_at)
     return { ok: false, plan, warnings, problems: [`the plan changed since you last saw it (now ${plan.updated_at}, you expected ${input.expect_updated_at}) — show it again before writing`] };
 
   if (op === "show") {
@@ -106,7 +109,7 @@ function main(input) {
       .sort((a, b) => a.send_at.localeCompare(b.send_at));
 
     if (drafts.length) warnings.push(`still draft, will not run: ${drafts.map((e) => e.name).join(", ")}`);
-    if (built.length) warnings.push(`already built earlier today: ${built.map((e) => `${e.name} (#${e.built.broadcast_id})`).join(", ")}`);
+    if (built.length) warnings.push(`already built earlier today: ${built.map((e) => `${e.name} (#${e.built.broadcast_id}${e.built.by ? ` by ${e.built.by}` : ""})`).join(", ")}`);
     if (tooLate.length) warnings.push(`confirmed but their send time has passed or is under ${LEAD_MINUTES} min away, skipped: ${tooLate.map((e) => `${e.name} ${e.send_at}`).join(", ")}`);
     if (matches.length > 1) warnings.push(`${matches.length} sends still to build today — build "${matches[0].name}" now; the later one is built by a later run, once this one has gone out`);
 
@@ -117,8 +120,17 @@ function main(input) {
     if (i < 0) return { ok: false, plan, warnings, problems: [`no entry for ${input.date} ${input.name}`] };
     if (plan.sends[i].built && !input.force)
       return { ok: false, plan, warnings, problems: [`${input.date} ${input.name} is already built as #${plan.sends[i].built.broadcast_id} — someone got there first. Do not schedule a second one.`] };
-    plan.sends[i].built = { broadcast_id: String(input.broadcast_id ?? ""), at: now, subject: input.subject ?? "" };
+    plan.sends[i].built = { broadcast_id: String(input.broadcast_id ?? ""), at: now, by: actor, subject: input.subject ?? "" };
     stamp();
+    return { ok: true, plan, warnings, problems };
+  }
+  if (op === "set_owner") {
+    const owner = String(input.owner ?? "").trim().toLowerCase();
+    if (owner && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(owner)) return { ok: false, plan, warnings, problems: [`owner must be an email address, got ${JSON.stringify(input.owner)}`] };
+    const before = plan.owner ?? "";
+    plan.owner = owner;
+    stamp();
+    warnings.push(owner ? `owner is now ${owner}${before && before !== owner ? ` (was ${before})` : ""}` : `owner cleared${before ? ` (was ${before})` : ""}`);
     return { ok: true, plan, warnings, problems };
   }
   if (op === "mark_sent") {
