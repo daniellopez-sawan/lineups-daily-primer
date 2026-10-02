@@ -192,7 +192,7 @@ Tell them: *"When you're back, say 'I connected it' and I'll check."*
 
 **Step 3 — verify** with `cio_auth_status`:
 - authenticated **and** `{ENV}` listed → *"Connected to the {brand} workspace. Carrying on."*
-- authenticated, `154686` **not** listed → *"Connected, but your Customer.io account isn't in the
+- authenticated, `{ENV}` **not** listed → *"Connected, but your Customer.io account isn't in the
   {brand} workspace yet. Ask Kenny to add you there, then come back. Nothing to redo here."*
 - not authenticated → the two usual causes (new session not started; Connect not finished) →
   offer Step 2 again.
@@ -321,7 +321,7 @@ Then: *"Next: build & schedule it, or leave it here?"*
 
 ### Build & schedule
 **Step 4.** Copy the base: `cio_write_api POST /v1/environments/{ENV}/newsletters/{config.base_broadcast_id}/copy`
-body `{"copy_to_env":154686}` → NEW id. Always the base, never "the most recent Primer".
+body `{"copy_to_env":{ENV}}` → NEW id. Always the base, never "the most recent Primer".
 **Step 5.** Lock it in the plan **now**: `plan.mjs` `op: mark_built` with `date`, `name`,
 `broadcast_id: NEW`, `subject`, `actor` (recorded as `built.by`), and `expect_updated_at` = the `updated_at` you last saw;
 PUT `dailyprimer_plan` back; read it back. Refused because already built → someone got there
