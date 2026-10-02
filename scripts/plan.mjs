@@ -19,7 +19,8 @@
  *
  * Entry shape:
  *   { date: "2026-09-24", send_at: "17:00", name: "TNF",
- *     tags: ["NFL Week 4","TNF"], match: "all"|"any",
+ *     mode: "tags" (default) | "latest",   // latest = newest posts, optionally within `categories` (ids); tags ignored
+ *     tags: ["NFL Week 4","TNF"], match: "all"|"any", categories: [42],
  *     min_articles: 2, max_articles: 4, include_hub_pages: false,
  *     status: "draft"|"confirmed", notes: "", allow_repeats: false,
  *     built: { broadcast_id: "123", at: ISO, subject: "...", sent_at?: ISO } | absent }
@@ -39,7 +40,10 @@ function validateEntry(e, vocab) {
   if (!DATE.test(e.date ?? "")) p.push(`date must be YYYY-MM-DD, got ${JSON.stringify(e.date)}`);
   if (!TIME.test(e.send_at ?? "")) p.push(`send_at must be HH:MM (24h, ${TZ}), got ${JSON.stringify(e.send_at)}`);
   if (!e.name) p.push("name is required (e.g. TNF, MNF, CFB Saturday)");
-  if (!Array.isArray(e.tags) || !e.tags.length) p.push("tags must be a non-empty list of exact WordPress tag names");
+  const mode = e.mode ?? "tags";
+  if (!["tags", "latest"].includes(mode)) p.push(`mode must be "tags" (default) or "latest", got ${JSON.stringify(e.mode)}`);
+  if (mode === "tags" && (!Array.isArray(e.tags) || !e.tags.length)) p.push("tags must be a non-empty list of exact WordPress tag names (or set mode: \"latest\" for the newest articles)");
+  if (mode === "latest" && e.categories !== undefined && !(Array.isArray(e.categories) && e.categories.every((c) => Number.isInteger(c)))) p.push("categories must be a list of WordPress category ids");
   if (!["all", "any"].includes(e.match ?? "any")) p.push(`match must be "all" or "any"`);
   const min = e.min_articles ?? 2, max = e.max_articles ?? 4;
   if (!(min >= 2 && max >= min && max <= 4)) p.push(`articles range invalid: min ${min}, max ${max} (must be 2–4: the subject/preheader need two articles and the template has 4 blocks)`);
@@ -54,7 +58,9 @@ function validateEntry(e, vocab) {
 function normalise(e) {
   return {
     date: e.date, send_at: e.send_at, name: e.name.trim(),
-    tags: e.tags.map((t) => String(t).trim()),
+    mode: e.mode ?? "tags",
+    tags: (e.tags ?? []).map((t) => String(t).trim()),
+    categories: Array.isArray(e.categories) ? e.categories : [],
     match: e.match ?? "any",
     min_articles: e.min_articles ?? 2, max_articles: e.max_articles ?? 4,
     include_hub_pages: Boolean(e.include_hub_pages),
