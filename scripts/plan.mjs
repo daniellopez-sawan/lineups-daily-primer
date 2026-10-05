@@ -20,7 +20,7 @@
  * Entry shape:
  *   { date: "2026-09-24", send_at: "17:00", name: "TNF",
  *     mode: "tags" (default) | "latest",   // latest = newest posts, optionally within `categories` (ids); tags ignored
- *     tags: ["NFL Week 4","TNF"], match: "all"|"any", categories: [42],
+ *     tags: ["NFL Week 4","TNF"], match: "all"|"any", categories: [42], exclude_tags: ["Promos"],
  *     min_articles: 2, max_articles: 4, include_hub_pages: false,
  *     status: "draft"|"confirmed", notes: "", allow_repeats: false,
  *     built: { broadcast_id: "123", at: ISO, subject: "...", sent_at?: ISO } | absent }
@@ -61,6 +61,7 @@ function normalise(e) {
     mode: e.mode ?? "tags",
     tags: (e.tags ?? []).map((t) => String(t).trim()),
     categories: Array.isArray(e.categories) ? e.categories : [],
+    exclude_tags: Array.isArray(e.exclude_tags) ? e.exclude_tags.map((x) => String(x).trim()) : [],
     match: e.match ?? "any",
     min_articles: e.min_articles ?? 2, max_articles: e.max_articles ?? 4,
     include_hub_pages: Boolean(e.include_hub_pages),

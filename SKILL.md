@@ -44,7 +44,7 @@ audience, template and base broadcast can change without touching this skill.
 | Brand | Say it as | Site = `{SITE}` | Customer.io environment = `{ENV}` | Fixtures folder | Ready? |
 |---|---|---|---|---|---|
 | `lineups` | Lineups Daily Primer | `https://www.lineups.com` | `154686` | `fixtures/lineups/` | **yes** |
-| `lsr` | LSR Daily Primer | `https://www.legalsportsreport.com` | `154687` | `fixtures/lsr/` | **not yet** — being set up (Oct 2026) |
+| `lsr` | LSR Daily Primer | `https://www.legalsportsreport.com` | `154687` | `fixtures/lsr/` | **pilot** — set up 5 Oct 2026; preview & test open, first builds with Daniel |
 | `gamingtoday` | Gaming Today Primer | *(tbd)* | `154685` | `fixtures/gamingtoday/` | **not yet** |
 
 Snippet prefix: `dailyprimer_` (per workspace — the same names exist independently in each).
@@ -54,7 +54,9 @@ mix brands in one run: one brand → one workspace → one plan → one set of s
 **Picking the brand** (before anything else, §0): if the person's message names one — "Lineups",
 "LSR", "Legal Sports Report", "Gaming Today" — use it silently. Otherwise ask: *"Which newsletter?
 1. Lineups · 2. LSR"* (list only brands marked ready; a brand that is not ready → *"LSR isn't set up
-yet — Daniel is on it. Lineups works."*). Say the brand back in the welcome line and in every
+yet — Daniel is on it. Lineups works."*). A **pilot** brand is listed with "(pilot)" after its name;
+everything works, but before a Build & schedule say once *"LSR is still in its pilot — Daniel
+wants to be on the first few builds. Has he okayed this one? yes / no"* and stop on no. Say the brand back in the welcome line and in every
 report (*"LSR Daily Primer — broadcast #12 …"*). Use `config.header_text` as the newsletter's
 display name everywhere this file writes "Lineups Daily Primer" in a name pattern.
 
@@ -483,6 +485,8 @@ together in one turn. Never fetch more than needed.
    Entry with `mode: "latest"` (no tags — newest articles, LSR-style): skip step 0 and use
    `{SITE}/wp-json/wp/v2/posts?per_page={max+3}&orderby=date&categories=<entry.categories ids>&_fields=…`
    (omit `categories` when the entry has none); `alreadySent` then does the de-duplication.
+   Entry `exclude_tags` (names, e.g. `["Promos"]` on LSR — its newest posts are often operator
+   promo pages) → resolve to ids like step 0 and add `&tags_exclude=<id,id>` to the posts URL.
    (comma = OR; `match: all` is enforced by §B via `requireTagIds`). Sport filter:
    `&categories=<ids>&per_page={max+3}`. Never `_embed` with `_fields` (drops `_embedded`), never
    without (pulls full bodies).
