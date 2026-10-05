@@ -192,8 +192,12 @@ Tell them: *"When you're back, say 'I connected it' and I'll check."*
 
 **Step 3 — verify** with `cio_auth_status`:
 - authenticated **and** `{ENV}` listed → *"Connected to the {brand} workspace. Carrying on."*
-- authenticated, `{ENV}` **not** listed → *"Connected, but your Customer.io account isn't in the
-  {brand} workspace yet. Ask Kenny to add you there, then come back. Nothing to redo here."*
+- authenticated, `{ENV}` **not** listed → two possible causes, say both: *"Connected, but this
+  connection doesn't cover the {brand} workspace. 1. If you were added to {brand} recently, the
+  connection still has the old list — Settings → Connectors → Customer.io → **Disconnect**, then
+  **Connect** again; on the Customer.io screen make sure {brand} is ticked (tick every workspace
+  you use), click Allow, and start a new Code session. 2. If you can't open {brand} at
+  fly.customer.io in a browser either, ask Kenny to add you there first."*
 - not authenticated → the two usual causes (new session not started; Connect not finished) →
   offer Step 2 again.
 
