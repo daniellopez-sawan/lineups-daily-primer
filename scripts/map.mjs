@@ -9,7 +9,7 @@
  * this pure means it behaves identically wherever it runs.
  *
  * stdin:  { "posts": [...], "media": {id: {...}}, "users": {id: {...}},
- *           "config": { prefix, headerText, minSlots?, maxSlots?, slots?,
+ *           "config": { prefix, headerText, minSlots?, maxSlots?, slots?, templateSlots?,
  *                       subjectMode?, preheaderMode?, subjectLines?, preheader?, alreadySent? } }
  *
  * subjectMode   "fromArticles" (default) -> subjectline1 = "<headerText>: <article 1 headline>",
@@ -20,8 +20,11 @@
  *               "fixed"                    -> config.preheader verbatim
  * Everything here is composed from the editors' own headlines — nothing is written by a model.
  *
- * Slots are a RANGE (default 2..4), not a fixed count. The template has maxSlots
- * article blocks, each with a show-if-not-empty display condition. We fill as
+ * Slots are a RANGE (default 2..4), not a fixed count. The template has `templateSlots`
+ * article blocks (default 4, at most HARD_MAX = 6 — per brand, from dailyprimer_config.max_slots),
+ * each with a show-if-not-empty display condition. maxSlots (this send) <= templateSlots.
+ * EVERY template block is written, so blocks past this send's maxSlots are emptied too —
+ * otherwise a 6-block template would show last week's articles 5 and 6 under a 4-article send. We fill as
  * many as we have good articles for and write the rest as EMPTY_SLOT (see
  * below — Customer.io won't accept "") so the condition hides them. Fewer than minSlots good articles is a refusal. `slots: N` is
  * still accepted as shorthand for minSlots = maxSlots = N.
@@ -90,11 +93,18 @@ function validate(a) {
   return p;
 }
 
+const HARD_MAX = 6;
 function resolveSlots(config) {
-  if (config.slots != null) return { min: Number(config.slots), max: Number(config.slots) };
-  const min = Number(config.minSlots ?? 2), max = Number(config.maxSlots ?? 4);
-  if (!(min >= 2 && max >= min && max <= 4)) throw new Error(`invalid slot range ${min}..${max} (must be 2–4)`);
-  return { min, max };
+  const blocks = Number(config.templateSlots ?? 4);
+  if (!(Number.isInteger(blocks) && blocks >= 2 && blocks <= HARD_MAX)) throw new Error(`invalid templateSlots ${config.templateSlots} (must be 2–${HARD_MAX})`);
+  if (config.slots != null) {
+    const n = Number(config.slots);
+    if (!(n >= 2 && n <= blocks)) throw new Error(`invalid slots ${n} (must be 2–${blocks}: the template has ${blocks} article blocks)`);
+    return { min: n, max: n, blocks };
+  }
+  const min = Number(config.minSlots ?? 2), max = Number(config.maxSlots ?? Math.min(4, blocks));
+  if (!(min >= 2 && max >= min && max <= blocks)) throw new Error(`invalid slot range ${min}..${max} (must be 2–${blocks}: the template has ${blocks} article blocks)`);
+  return { min, max, blocks };
 }
 
 function main(input) {
@@ -107,7 +117,7 @@ function main(input) {
   if (!headerText) throw new Error("config.headerText is required (the newsletter's header snippet)");
   if (subjectMode === "fixed" && !(subjectLines[0] ?? "").trim()) throw new Error(`subjectMode "fixed" needs subjectLines[0] — otherwise the previous send's subject would stay in place`);
   if (preheaderMode === "fixed" && !(preheader ?? "").trim()) throw new Error(`preheaderMode "fixed" needs a non-empty preheader`);
-  const { min, max } = resolveSlots(config);
+  const { min, max, blocks } = resolveSlots(config);
 
   // Tag filter lives here, not in the agent's head: with match "all" every required tag id must be on the post.
   const required = requireTagIds.map(Number);
@@ -134,7 +144,7 @@ function main(input) {
 
   if (chosen.length < min) {
     problems.push(`only ${chosen.length} usable article(s) but the newsletter needs at least ${min}`);
-    return { ok: false, articles: chosen, writes: [], problems, filledSlots: chosen.length, maxSlots: max };
+    return { ok: false, articles: chosen, writes: [], problems, filledSlots: chosen.length, maxSlots: max, templateSlots: blocks };
   }
 
   const writes = [{ name: `${prefix}header1_text`, value: headerText }];
@@ -158,7 +168,7 @@ function main(input) {
     preheader;
   // Only written when there is something to write, so a run never blanks the current value.
   if (preheaderValue) writes.push({ name: `${prefix}preheader1`, value: preheaderValue });
-  for (let i = 0; i < max; i++) {
+  for (let i = 0; i < blocks; i++) {
     const n = i + 1, a = chosen[i];
     // Unused slots get the sentinel on purpose: the block's display condition
     // hides them. Leaving a stale value there would show last week's article.
@@ -172,7 +182,7 @@ function main(input) {
   }
 
   // Skipped repeats/incompletes are informational when we still have enough: report, don't refuse.
-  return { ok: true, articles: chosen, writes, problems, filledSlots: chosen.length, maxSlots: max, chosenIds: chosen.map((a) => a.id) };
+  return { ok: true, articles: chosen, writes, problems, filledSlots: chosen.length, maxSlots: max, templateSlots: blocks, chosenIds: chosen.map((a) => a.id) };
 }
 
 let raw = "";

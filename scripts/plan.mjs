@@ -21,7 +21,7 @@
  *   { date: "2026-09-24", send_at: "17:00", name: "TNF",
  *     mode: "tags" (default) | "latest",   // latest = newest posts, optionally within `categories` (ids); tags ignored
  *     tags: ["NFL Week 4","TNF"], match: "all"|"any", categories: [42], exclude_tags: ["Promos"],
- *     min_articles: 2, max_articles: 4, include_hub_pages: false,
+ *     min_articles: 2, max_articles: 4 (up to the brand's template blocks — pass templateSlots = config.max_slots, max 6), include_hub_pages: false,
  *     status: "draft"|"confirmed", notes: "", allow_repeats: false,
  *     built: { broadcast_id: "123", at: ISO, subject: "...", sent_at?: ISO } | absent }
  * ops also: "mark_sent" (records built.sent_at once Customer.io reports send_state "sent"),
@@ -35,7 +35,7 @@ const DATE = /^\d{4}-\d{2}-\d{2}$/, TIME = /^([01]\d|2[0-3]):[0-5]\d$/;
 
 const emptyPlan = () => ({ version: 1, timezone: TZ, owner: "", updated_by: "", updated_at: "", sends: [] });
 
-function validateEntry(e, vocab) {
+function validateEntry(e, vocab, blocks = 4) {
   const p = [], w = [];
   if (!DATE.test(e.date ?? "")) p.push(`date must be YYYY-MM-DD, got ${JSON.stringify(e.date)}`);
   if (!TIME.test(e.send_at ?? "")) p.push(`send_at must be HH:MM (24h, ${TZ}), got ${JSON.stringify(e.send_at)}`);
@@ -45,8 +45,8 @@ function validateEntry(e, vocab) {
   if (mode === "tags" && (!Array.isArray(e.tags) || !e.tags.length)) p.push("tags must be a non-empty list of exact WordPress tag names (or set mode: \"latest\" for the newest articles)");
   if (mode === "latest" && e.categories !== undefined && !(Array.isArray(e.categories) && e.categories.every((c) => Number.isInteger(c)))) p.push("categories must be a list of WordPress category ids");
   if (!["all", "any"].includes(e.match ?? "any")) p.push(`match must be "all" or "any"`);
-  const min = e.min_articles ?? 2, max = e.max_articles ?? 4;
-  if (!(min >= 2 && max >= min && max <= 4)) p.push(`articles range invalid: min ${min}, max ${max} (must be 2–4: the subject/preheader need two articles and the template has 4 blocks)`);
+  const min = e.min_articles ?? 2, max = e.max_articles ?? Math.min(4, blocks);
+  if (!(min >= 2 && max >= min && max <= blocks)) p.push(`articles range invalid: min ${min}, max ${max} (must be 2–${blocks}: the subject/preheader need two articles and this brand's template has ${blocks} blocks)`);
   if (!["draft", "confirmed"].includes(e.status ?? "draft")) p.push(`status must be "draft" or "confirmed"`);
   if (vocab && Array.isArray(e.tags)) {
     const known = new Set(Object.values(vocab).flatMap((g) => Object.keys(g).filter((k) => !k.startsWith("_"))));
@@ -149,7 +149,9 @@ function main(input) {
   }
   if (op === "set") {
     const e = input.entry ?? {};
-    const v = validateEntry(e, vocabulary);
+    const blocks = Number(input.templateSlots ?? 4);
+    if (!(Number.isInteger(blocks) && blocks >= 2 && blocks <= 6)) return { ok: false, plan, warnings, problems: [`templateSlots must be 2–6, got ${input.templateSlots}`] };
+    const v = validateEntry(e, vocabulary, blocks);
     if (v.problems.length) return { ok: false, plan, warnings: v.warnings, problems: v.problems };
     const n = normalise(e);
     const i = plan.sends.findIndex((x) => key(x) === key(n));

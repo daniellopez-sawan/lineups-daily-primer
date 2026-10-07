@@ -60,13 +60,14 @@ wants to be on the first few builds. Has he okayed this one? yes / no"* and stop
 report (*"LSR Daily Primer — broadcast #12 …"*). Use `config.header_text` as the newsletter's
 display name everywhere this file writes "Lineups Daily Primer" in a name pattern.
 
-`dailyprimer_config` (JSON) provides: `template_id` (the Design Studio email — 4 article blocks,
+`dailyprimer_config` (JSON) provides: `template_id` (the Design Studio email — `max_slots` article blocks,
 each hidden when its title snippet is `<!-- empty -->`), `base_broadcast_id` (the stencil every
 send is copied from; stays `drafted` forever), `sender_identity_id`, `audience` (the `filters`
 blob, `subscription_topic_id`, `send_percentage`, the four booleans, and the segment names for
 display), `header_text`, `test_recipients`, `known_addresses`, `ignore_broadcast_names`,
 `broadcast_url` (a pattern with `{id}` for the Customer.io page of a broadcast). Refer to these as
-`config.<key>` below. Articles per send: 2–4; unused slots get `<!-- empty -->` (Customer.io
+`config.<key>` below. **`config.max_slots`** = how many article blocks this brand's template has
+(missing = 4; Lineups 4, LSR 6; never above 6). Articles per send: 2–`max_slots`; unused slots get `<!-- empty -->` (Customer.io
 refuses empty values). Test recipients: **`config.test_recipients`, always** — every test goes
 to that whole list, so the people who check Customer.io know a send is coming without being
 told. Show the list on the confirmation card; the person may add addresses for this one test,
@@ -144,13 +145,15 @@ Say the permission line from ground rule 3, then check. Each item is ✅ or a pl
    keep a name→id map. Parse `dailyprimer_config`'s `.value` as JSON → **`config`**, used everywhere
    below; missing or unparsable → STOP: *"The configuration snippet is missing — nothing can run.
    Ping Daniel."* Required names: `dailyprimer_config`, `_header1_text`, `_subjectline1`,
-   `_subjectline2`, `_preheader1`, `_plan`, and `_article1..4_{title,page,image,text,author}` (26).
-   `_lastsent_ids` appears after the first build (27). Any required name missing → say which; the article ones are
+   `_subjectline2`, `_preheader1`, `_plan`, and `_article1..N_{title,page,image,text,author}` with
+   N = `config.max_slots` (6 + 5×N names: 26 for 4 blocks, 36 for 6). `_lastsent_ids` appears after
+   the first build (+1). Any required name missing → say which; the article ones are
    recreated on the next build; a missing `_plan` → ask: *"create an empty plan, or skip and
    preview the latest articles?"* — do not create it silently.
 4. **Template** — `GET /v1/environments/{ENV}/design_studio/emails/{config.template_id}`:
    `.content.subject` and `.content.preheader_text` reference `dailyprimer_`; `.content.html`
-   contains `{% if snippets.dailyprimer_article1_title`; `.envelope.from_id` equals
+   contains `{% if snippets.dailyprimer_article1_title` and `snippets.dailyprimer_article{N}_title`
+   for N = `config.max_slots` (a template with fewer blocks than the config says → STOP, ping Vivien); `.envelope.from_id` equals
    `config.sender_identity_id`. A wrong sender → report it and ask whether to set it — only on
    yes, and say it edits the template. `…/unpublished_changes` true → mention it (tests render the
    published version) and move on.
@@ -373,11 +376,11 @@ now) or the routine (later) builds from it. Only `confirmed` entries are ever bu
 
 Entry: `date` · `send_at` (24h, America/New_York) · `name` · `tags` (exact WordPress names) ·
 `match` (`all` = article must carry every tag; `any` = at least one) · `min_articles` (2) ·
-`max_articles` (2–4) · `allow_repeats` (default false — dedupe against past sends) · `status`
+`max_articles` (2–`config.max_slots`) · `allow_repeats` (default false — dedupe against past sends) · `status`
 (`draft`/`confirmed`) · `notes` · `built` (set by Build; read-only here).
 
 **Always go through `scripts/plan.mjs`** — never hand-edit the JSON. Read the snippet, pipe
-`{plan, op, …, actor, vocabulary: fixtures/{brand}/event-tags.json, expect_updated_at}` in, PUT the
+`{plan, op, …, actor, vocabulary: fixtures/{brand}/event-tags.json, templateSlots: config.max_slots ?? 4, expect_updated_at}` in, PUT the
 returned `plan` back, read it back and show it. Ops: `show`, `set` (upsert by date+name),
 `remove`, `confirm`, `today`, `mark_built`, `mark_sent`, `set_owner`.
 
@@ -387,7 +390,7 @@ returned `plan` back, read it back and show it. Ops: `show`, `set` (upsert by da
 2. *"1. add a send · 2. change a send · 3. confirm a send · 4. remove a send · 5. done"*
 3. Add / Change — one thing at a time: **day**, **time** (suggest: primetime 2–3 h before
    kickoff; day games 10–11 AM ET after the morning pieces land), **tags** (list the sport's
-   vocabulary), **how many** (2–4), **match** when 2+ tags. Show the entry → *"save as draft, save
+   vocabulary), **how many** (2–`config.max_slots`), **match** when 2+ tags. Show the entry → *"save as draft, save
    and confirm, or cancel?"*
    A `built` entry cannot be changed here — say *"This one is already built as #NNN — change or
    cancel that broadcast in Customer.io."*
@@ -500,11 +503,12 @@ together in one turn. Never fetch more than needed.
 
 Pipe `{posts, media (keyed by id), users (keyed by id), config}` into `scripts/map.mjs` (absolute
 path). Config: `prefix` `"dailyprimer_"`, `headerText` = `config.header_text`, `minSlots` =
-entry `min_articles` (never below 2), `maxSlots` = `max_articles`, `alreadySent` = ids from
+entry `min_articles` (never below 2), `maxSlots` = `max_articles`, `templateSlots` = `config.max_slots` (missing = 4) — the
+script then writes **every** template block and empties the ones this send doesn't use, `alreadySent` = ids from
 `lastsent_ids`, `allowRepeats` = entry `allow_repeats`, `requireTagIds` = resolved tag ids when
 `match: all` (else `[]`), `sendDate` = `"{date}T{send_at}:00-04:00"` (−05:00 after the November
 clock change), `subjectMode` / `preheaderMode` / `subjectLines` / `preheader` only if changed.
-Returns `{ok, articles, writes, problems, filledSlots, maxSlots, chosenIds}`; exits non-zero on
+Returns `{ok, articles, writes, problems, filledSlots, maxSlots, templateSlots, chosenIds}`; exits non-zero on
 refusal. If it can't run, STOP (ground rule 8) — do not map by hand.
 
 Translate refusals: *fewer than 2 usable* → *"The site hasn't published enough tagged pieces for
