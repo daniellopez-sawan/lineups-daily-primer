@@ -484,7 +484,11 @@ together in one turn. Never fetch more than needed.
    HTML-decoded `name` equals the tag **exactly** (case-insensitive) — search is fuzzy. No exact
    match → the §3 "tag doesn't exist" options. Cache ids in `fixtures/{brand}/event-tags.json` if writable
    (best-effort; never block on it).
-1. **Posts** — plan-driven: `{SITE}/wp-json/wp/v2/posts?per_page=20&tags=<id,id>&_fields=id,date,link,title,excerpt,author,featured_media,categories,tags`.
+1. **Posts** — plan-driven: `{SITE}/wp-json/wp/v2/posts?per_page=20&tags=<id,id>&_fields=id,date,date_gmt,link,title,excerpt,author,featured_media,categories,tags`.
+   Entry with `max_age_days` (weekly digests) → add `&after=<now − max_age_days, ISO>` and pass
+   `maxAgeDays` to §B too (belt and braces). Say it in words: *"Top-tagged articles from the last
+   7 days that haven't been sent yet."* WordPress has no "when was this tagged" date, so the window
+   is on publish date; `lastsent_ids` keeps anything already sent out.
    Entry with `mode: "latest"` (no tags — newest articles, LSR-style): skip step 0 and use
    `{SITE}/wp-json/wp/v2/posts?per_page={max+3}&orderby=date&categories=<entry.categories ids>&_fields=…`
    (omit `categories` when the entry has none); `alreadySent` then does the de-duplication.
@@ -505,7 +509,7 @@ Pipe `{posts, media (keyed by id), users (keyed by id), config}` into `scripts/m
 path). Config: `prefix` `"dailyprimer_"`, `headerText` = `config.header_text`, `minSlots` =
 entry `min_articles` (never below 2), `maxSlots` = `max_articles`, `templateSlots` = `config.max_slots` (missing = 4) — the
 script then writes **every** template block and empties the ones this send doesn't use, `alreadySent` = ids from
-`lastsent_ids`, `allowRepeats` = entry `allow_repeats`, `requireTagIds` = resolved tag ids when
+`lastsent_ids`, `allowRepeats` = entry `allow_repeats`, `maxAgeDays` = entry `max_age_days` (omit if unset), `now` = current ISO time, `requireTagIds` = resolved tag ids when
 `match: all` (else `[]`), `sendDate` = `"{date}T{send_at}:00-04:00"` (−05:00 after the November
 clock change), `subjectMode` / `preheaderMode` / `subjectLines` / `preheader` only if changed.
 Returns `{ok, articles, writes, problems, filledSlots, maxSlots, templateSlots, chosenIds}`; exits non-zero on

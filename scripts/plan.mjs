@@ -23,6 +23,7 @@
  *     tags: ["NFL Week 4","TNF"], match: "all"|"any", categories: [42], exclude_tags: ["Promos"],
  *     min_articles: 2, max_articles: 4 (up to the brand's template blocks — pass templateSlots = config.max_slots, max 6), include_hub_pages: false,
  *     status: "draft"|"confirmed", notes: "", allow_repeats: false,
+ *     max_age_days: 7 (optional — only articles published in the last N days; weekly digests),
  *     built: { broadcast_id: "123", at: ISO, subject: "...", sent_at?: ISO } | absent }
  * ops also: "mark_sent" (records built.sent_at once Customer.io reports send_state "sent"),
  *   "set_owner" { owner: email | "" } — plan.owner is the person building the sends this week (a signal, not a lock).
@@ -48,6 +49,7 @@ function validateEntry(e, vocab, blocks = 4) {
   const min = e.min_articles ?? 2, max = e.max_articles ?? Math.min(4, blocks);
   if (!(min >= 2 && max >= min && max <= blocks)) p.push(`articles range invalid: min ${min}, max ${max} (must be 2–${blocks}: the subject/preheader need two articles and this brand's template has ${blocks} blocks)`);
   if (!["draft", "confirmed"].includes(e.status ?? "draft")) p.push(`status must be "draft" or "confirmed"`);
+  if (e.max_age_days != null && !(Number(e.max_age_days) >= 1 && Number(e.max_age_days) <= 60)) p.push(`max_age_days must be 1–60, got ${JSON.stringify(e.max_age_days)}`);
   if (vocab && Array.isArray(e.tags)) {
     const known = new Set(Object.values(vocab).flatMap((g) => Object.keys(g).filter((k) => !k.startsWith("_"))));
     for (const t of e.tags) if (!known.has(t)) w.push(`tag "${t}" is not in the vocabulary — check spelling with Thom (lookup is by exact name)`);
@@ -68,6 +70,7 @@ function normalise(e) {
     status: e.status ?? "draft",
     notes: e.notes ?? "",
     allow_repeats: Boolean(e.allow_repeats),
+    ...(e.max_age_days != null ? { max_age_days: Number(e.max_age_days) } : {}),
   };
 }
 

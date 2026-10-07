@@ -10,7 +10,13 @@
  *
  * stdin:  { "posts": [...], "media": {id: {...}}, "users": {id: {...}},
  *           "config": { prefix, headerText, minSlots?, maxSlots?, slots?, templateSlots?,
- *                       subjectMode?, preheaderMode?, subjectLines?, preheader?, alreadySent? } }
+ *                       subjectMode?, preheaderMode?, subjectLines?, preheader?, alreadySent?,
+ *                       maxAgeDays?, now? } }
+ *
+ * maxAgeDays: drop posts published more than N days before `now` (ISO, default: current time).
+ * WordPress does not record WHEN a tag was added, so "tagged since the last send" is implemented as
+ * "published in the last N days" + alreadySent (never repeat). An article published Monday and
+ * tagged Thursday is still picked up; anything older than the window is treated as stale.
  *
  * subjectMode   "fromArticles" (default) -> subjectline1 = "<headerText>: <article 1 headline>",
  *                                            subjectline2 = subjectLines[1] if given, else headerText
@@ -111,7 +117,7 @@ function main(input) {
   const { posts = [], media = {}, users = {}, config = {} } = input;
   const { prefix, headerText, subjectLines = [], preheader, alreadySent = [],
           subjectMode = "fromArticles", preheaderMode = "secondHeadline", sendDate,
-          requireTagIds = [], allowRepeats = false } = config;
+          requireTagIds = [], allowRepeats = false, maxAgeDays = null, now = null } = config;
 
   assertSafePrefix(prefix);
   if (!headerText) throw new Error("config.headerText is required (the newsletter's header snippet)");
@@ -121,8 +127,17 @@ function main(input) {
 
   // Tag filter lives here, not in the agent's head: with match "all" every required tag id must be on the post.
   const required = requireTagIds.map(Number);
-  const tagged = required.length ? posts.filter((p) => required.every((t) => (p.tags ?? []).map(Number).includes(t))) : posts;
-  const droppedByTag = posts.length - tagged.length;
+  let pool = posts, droppedByAge = 0;
+  if (maxAgeDays != null) {
+    const days = Number(maxAgeDays);
+    if (!(days > 0 && days <= 60)) throw new Error(`invalid maxAgeDays ${maxAgeDays} (must be 1–60)`);
+    const cutoff = new Date(now ?? Date.now()).getTime() - days * 86400000;
+    // WP "date" is site-local without offset; parse as ET-ish UTC (a few hours' skew is irrelevant at day granularity).
+    pool = posts.filter((p) => Date.parse(p.date_gmt ? p.date_gmt + "Z" : p.date) >= cutoff);
+    droppedByAge = posts.length - pool.length;
+  }
+  const tagged = required.length ? pool.filter((p) => required.every((t) => (p.tags ?? []).map(Number).includes(t))) : pool;
+  const droppedByTag = pool.length - tagged.length;
   const sentIds = new Set(allowRepeats ? [] : alreadySent.map(Number));
   const fresh = tagged.filter((p) => !sentIds.has(Number(p.id)));
   const repeats = tagged.length - fresh.length;
@@ -138,6 +153,7 @@ function main(input) {
   }
   const chosen = good.slice(0, max);
 
+  if (droppedByAge) problems.push(`${droppedByAge} article(s) older than ${maxAgeDays} days skipped (stale for this send)`);
   if (droppedByTag) problems.push(`${droppedByTag} of the ${posts.length} articles fetched don't carry every required tag (skipped)`);
   if (repeats) problems.push(`${repeats} article(s) already went out in a previous send (skipped — set allow_repeats on the plan entry to include them)`);
   if (rejected.length) problems.push(`skipped ${rejected.length} incomplete article(s): ` + rejected.join(" | "));
