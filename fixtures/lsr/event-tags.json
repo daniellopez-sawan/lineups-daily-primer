@@ -1,1 +1,8 @@
-{"_note":"LSR event/topic tag vocabulary — to be agreed with the LSR editorial team. Names must match the WordPress tag EXACTLY."}
+{
+  "_note": "LSR tag vocabulary. Agreed on the LSR call 2026-10-06: a weekly digest of 'top' stories and same-day 'hot' sends. Names below are PROPOSED (Daniel → Brian, 2026-10-07) and not created on the site yet; null = no WordPress tag id yet. Names must match the WordPress tag EXACTLY.",
+  "LSR": {
+    "_note": "Editorial picks — an article may carry both.",
+    "LSR Top": null,
+    "LSR Hot": null
+  }
+}
