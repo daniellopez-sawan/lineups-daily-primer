@@ -65,7 +65,8 @@ each hidden when its title snippet is `<!-- empty -->`), `base_broadcast_id` (th
 send is copied from; stays `drafted` forever), `sender_identity_id`, `audience` (the `filters`
 blob, `subscription_topic_id`, `send_percentage`, the four booleans, and the segment names for
 display), `header_text`, `test_recipients`, `known_addresses`, `ignore_broadcast_names`,
-`broadcast_url` (a pattern with `{id}` for the Customer.io page of a broadcast). Refer to these as
+`broadcast_url` (a pattern with `{id}` for the Customer.io page of a broadcast), `youtube_feed`
+(the brand's YouTube channel RSS URL; missing = option 8 is not set up for this brand). Refer to these as
 `config.<key>` below. **`config.max_slots`** = how many article blocks this brand's template has
 (missing = 4; Lineups 4, LSR 6; never above 6). Articles per send: 2–`max_slots`; unused slots get `<!-- empty -->` (Customer.io
 refuses empty values). Test recipients: **`config.test_recipients`, always** — every test goes
@@ -105,6 +106,7 @@ Do not launch into work. One line of welcome, then the menu:
 > 5. **Check** what went out
 > 6. **First time here?** — 5-minute walkthrough
 > 7. **Understand / settings**
+> 8. **Add YouTube videos** — pick from the channel's latest videos
 
 If the request already makes the intent clear ("preview", "build tonight's MNF"), skip the menu —
 but always run the readiness check (§1) first and surface any problem before acting.
@@ -268,6 +270,36 @@ ask for the number — never choose alone.
 
 ---
 
+## 3b · YouTube videos (menu 8, or "add our videos", "include the video")
+
+Videos fill the **same article blocks** — no template change. Each one shows the video thumbnail,
+its title, "By {presenter}", and a one-line summary starting "▶ Video:"; the link opens YouTube.
+
+1. No `config.youtube_feed` → *"YouTube isn't set up for {brand} yet — ask Daniel."* Stop.
+2. **Fetch** the feed with Bash (YouTube allows it — this is the one exception to §A's
+   browser-only rule): `curl -fsSL --max-time 15 "<config.youtube_feed>"` into a temp file, then
+   `node "<skill dir>/scripts/youtube.mjs"` with `{"xml": <file contents>, "limit": 8}` on stdin.
+   Fails → try the Browser tool (`navigate` to the feed, then `javascript_tool`:
+   `new XMLSerializer().serializeToString(document)`) and feed that text in instead.
+3. **Show the list**, numbered, newest first: `1. {title} — {presenter} · {published, e.g. "Tue 2:34 PM"}`
+   plus "(Short)" for Shorts. Mark any id already in `dailyprimer_lastsent_ids` as "(already sent)".
+4. **Ask** — one question: *"Which videos? Type numbers (e.g. 2, 4). And where: 1. after today's
+   articles · 2. first · 3. videos only"*. Respect `max_articles`: if articles + videos exceed it,
+   say which articles would drop off and let them choose.
+5. **Image check** for each chosen video: `curl -s -o /dev/null -w "%{http_code}" "<image>"`; not
+   200 → use its `imageFallback`.
+6. Merge into §B: put the chosen videos' `posts` in the requested position of the posts list,
+   and add their `media` / `users` entries. Then continue exactly as a normal preview → test →
+   build. The video ids (`yt:…`) go into `dailyprimer_lastsent_ids` with the post ids, so a video
+   is never sent twice. Videos have no WordPress tags, so `match: all` / `requireTagIds` never
+   apply to them — pass them only after the tag filter, i.e. call §B with `requireTagIds: []` when
+   videos are mixed in and you have already filtered the articles yourself.
+
+Subject line: if a video lands in position 1, the subject uses its title — say so on the
+confirmation card and offer to put an article first instead.
+
+---
+
 ## 4 · Send a test / Build & schedule (only on an explicit request)
 
 Both begin the same way.
@@ -356,7 +388,7 @@ and say the result back in words. Refuse if it is under 30 minutes away or more 
 to ET. Different → `update_type: cancel` and STOP. A **403** mentioning "Allow agent to edit live
 data" → *"Your Customer.io account can't schedule from here. The broadcast is built and drafted
 (#NEW) — schedule it in Customer.io → Broadcasts, and tell Daniel."*
-**Step 10.** Record the articles: `dailyprimer_lastsent_ids` = today's chosen post ids
+**Step 10.** Record the articles: `dailyprimer_lastsent_ids` = today's chosen post ids (and `yt:…` video ids)
 (`chosenIds` from §B) + the existing value, comma-separated, newest first, keep 30 (PUT, or POST
 if missing).
 

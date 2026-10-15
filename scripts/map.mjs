@@ -138,8 +138,9 @@ function main(input) {
   }
   const tagged = required.length ? pool.filter((p) => required.every((t) => (p.tags ?? []).map(Number).includes(t))) : pool;
   const droppedByTag = pool.length - tagged.length;
-  const sentIds = new Set(allowRepeats ? [] : alreadySent.map(Number));
-  const fresh = tagged.filter((p) => !sentIds.has(Number(p.id)));
+  // Ids compared as strings: WordPress posts are numbers, YouTube videos are "yt:<videoId>".
+  const sentIds = new Set(allowRepeats ? [] : alreadySent.map((x) => String(x).trim()));
+  const fresh = tagged.filter((p) => !sentIds.has(String(p.id)));
   const repeats = tagged.length - fresh.length;
 
   // Validate every fresh candidate; keep the good ones in publish order.
