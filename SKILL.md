@@ -120,7 +120,10 @@ Say the permission line from ground rule 3, then check. Each item is ✅ or a pl
 0. **Self-update, then can I run the scripts?** — first, quietly run
    `sh "<skill dir>/scripts/update.sh"` (15-second tool timeout — macOS has no `timeout` command).
    It needs nothing but curl and tar, which every Mac has, and always exits 0. Read its one line:
-   `updated to …` → say once *"I picked up a newer version of this assistant — carrying on."*;
+   `updated to …` → the files on disk are now newer than the instructions you loaded. **Read
+   `<skill dir>/SKILL.md` again in full and follow that version from here on** (it may have new
+   menu options or steps), then say once *"I picked up a newer version of this assistant —
+   carrying on."* and continue from §1 with the new text;
    `already up to date` → say nothing; `update check skipped: …` → say nothing, continue with
    what is installed. Never block on it, never run git. Then read `<skill dir>/.version` and
    include its first 7 characters in the readiness block as *"Assistant version: abc1234"* — that
